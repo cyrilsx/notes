@@ -1,0 +1,4 @@
+=== Revisiting Design Patterns after 20
+Edson YANAGA.
+
+Edson nous présente comment écrire certaines patrons de conception du _Gang of 4 de 1994:_ avec java 20.
