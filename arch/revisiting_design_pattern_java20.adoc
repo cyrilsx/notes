@@ -56,7 +56,7 @@ abstract class AbstractUserNotifier implements UserNotifier {
 }
 ----
 
-Ensuite, les classes de la chaine inplemente l'interface.
+Ensuite, les classes de la chaine implémente l'interface.
 [source,java]
 ----
 class EmailNotifier extends AbstractUserNotifier {
@@ -140,6 +140,13 @@ Le visiteur propose de placer un comportement nouveau dans une classe séparée 
 
 image:arch/visiteur.png[Pattern Visiteur]
 
+Exemples dans JDK :
+
+* `javax.lang.model.element.AnnotationValue` et `AnnotationValueVisitor`
+* `javax.lang.model.element.Element` et `ElementVisitor`
+* `javax.lang.model.type.TypeMirror` et `TypeVisitor`
+* `java.nio.file.FileVisitor` et `SimpleFileVisitor`
+
 ===== Double répartition
 
 Le `visiteur` est basé sur le principe de https://refactoring.guru/fr/design-patterns/visitor-double-dispatch[double répartition]. La double répartation est une technique qui permet d'utiliser une 
@@ -152,9 +159,9 @@ Nous allons voir qu'il faut beaucoup de code pour le `visiteur`. Commencons par 
 [source,java]
 ----
 interface Visitor<T> {
-    T visit(LoyaltyCard loyaltyCard);
+    T visit(Car car);
 
-    T visit(EventTicket eventTicket);
+    T visit(Book book);
 }
 
 public interface Element {
@@ -162,16 +169,115 @@ public interface Element {
     void accept(Visitor visitor);
 
 }
-
 ----
+
+Ensuite, il faut implémenter les `Element` à visiter.
 
 [source,java]
 ----
+public record Car(BigDecimal price) implements Element<BigDecimal> {
+    @Override
+    public BigDecimal accept(Visiteur visiteur) {
+        return visiteur.visit(this);
+    }
+}
+
+public record Book(BigDecimal price) implements Element<BigDecimal> {
+    @Override
+    public BigDecimal accept(Visiteur visiteur) {
+        return visiteur.visit(this);
+    }
+}
+----
+
+Et enfin il reste l'implémentation du visiteur.
+
+[source,java]
+----
+public class TaxVisiteur implements Visiteur<BigDecimal> {
+
+    @Override
+    public BigDecimal visit(Car car) {
+        return car.price().multiply(BigDecimal.valueOf(0.5));
+    }
+
+    @Override
+    public BigDecimal visit(Alcoohol alcoohol) {
+        return alcoohol.price().multiply(BigDecimal.valueOf(0.6));
+    }
+
+    @Override
+    public BigDecimal visit(Book book) {
+        return book.price().multiply(BigDecimal.valueOf(0.2));
+    }
+}
+----
+
+Toutes les briques du visiteur sont prêtes, il ne reste plus qu'à l'utiliser.
+
+[source,java]
+----
+VisiteurTax taxVisiteur = new FrenchTaxVisiteur();
+System.out.println(taxVisiteur.visit(new Alcoohol(BigDecimal.TEN)));
+System.out.println(taxVisiteur.visit(new Car(BigDecimal.TEN)));
+System.out.println(taxVisiteur.visit(new Book(BigDecimal.TEN)));
+----
+
+L'exclusivité des éléments à visiter doivent être implémentées sinon le programme ne compile pas. C'est un des avantages du visiteur.
+
+===== Refactoring using java 20
+
+Avec cette nouvelle version de java, il va être possible d'utiliser le pattern matching (avec les `sealed interfaces permits` sinon l'exclusivité des cas n'est pas assurer à la compilation).
+
+[source,java]
+----
+sealed interface VisiteurTax permits Car, Book {
+    double calculate(); // calculate plutôt que accept ;-)
+}
+
+record Car(double price) implements VisiteurTax {
+    @Override
+    public double calculate() {
+        return price * 0.2;
+    }
+}
+
+record Book(double price) implements VisiteurTax {
+    @Override
+    public double calculate() {
+        return price * 0.1;
+    }
+}
+----
+
+Ensuite, il nous reste plus qu'à utiliser le pattern matching pour assurer le fonctionnement initial avec un 
+bonus en plus.
+
+[source,java]
+----
+System.out.println("Tax for book " + calculateTax(new Book(10.0)));
+System.out.println("Tax for car " + calculateTax(new Car(100000.0)));
+
+private static double calculateTaxWithSeal(VisiteurTax visiteurTax) {
+    return switch (visiteurTax) {
+        case Car car -> car.calculate();
+        case Book book when book.price > 100 -> book.calculate();
+        case Book book -> book.calculate();
+        // plus nécessaire d'avoir un case default, tout est assuré                                                    
+    };
+        
+}
 
 ----
 
+
 ==== Singleton
 Singleton permet de limiter la classe à une instance.
+
+Exemples dans le JDK :
+
+* `java.lang.Runtime#getRuntime()`
+* `java.lang.System#getSecurityManager()`
 
 ===== Illustration
 
@@ -205,7 +311,7 @@ public enum RevisitedSingleton {
 
 ==== Specification
 
-Le pattern `specification` est issu du livre DDD d'Eric Evans. Il permet de combiner des règles métiers en les chainant les règles ensemble via des opérateurs logiques.
+Le pattern `specification` est issu du livre DDD d'Eric Evans. Il permet de combiner des règles métiers en les chainant les règles ensemble via des opérateurs logiques. Ce pattern peut être trouver dans `QueryDSL`.
 
 image:arch/Specification_UML.png[Spécification pattern UML]
 
@@ -275,3 +381,5 @@ Predicate<String> isNumeric = s -> s.matches("\\d+");
 Predicate<String> potentialCreditCardNumber = rightLength.and(isNumeric);
 System.out.println(potentialCreditCardNumber.test("1234123412341234"));
 ----
+
+
